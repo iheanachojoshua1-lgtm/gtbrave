@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crypto Price Dashboard</title>
+<meta name="description" content="Live cryptocurrency prices, 7-day charts and market data.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a1020;
+    --panel: #101830;
+    --panel-2: #141e3c;
+    --line: #223058;
+    --text: #e8ecff;
+    --muted: #8d99c6;
+    --accent: #6366f1;
+    --accent-soft: rgba(99, 102, 241, 0.16);
+    --up: #34d399;
+    --down: #f87171;
+    --radius: 14px;
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+  }
+  a { color: inherit; }
+  button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 32px 20px 56px; }
+
+  header.top {
+    display: flex; flex-wrap: wrap; gap: 16px 24px;
+    align-items: flex-end; justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  h1 { margin: 0; font-size: clamp(26px, 4vw, 36px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+  .sub { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+  .seg { display: inline-flex; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+  .seg button {
+    border: 0; background: transparent; color: var(--muted);
+    padding: 6px 14px; border-radius: 7px; cursor: pointer; font-weight: 600; font-size: 13px;
+  }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+
+  .search {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 8px 12px; width: 220px; max-width: 100%;
+  }
+  .search::placeholder { color: var(--muted); }
+
+  /* Featured coin */
+  .feature {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    display: grid; grid-template-columns: 300px 1fr; overflow: hidden; margin-bottom: 24px;
+  }
+  .feature-info { padding: 24px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 18px; }
+  .coin-id { display: flex; align-items: center; gap: 12px; }
+  .coin-id img { width: 36px; height: 36px; border-radius: 50%; }
+  .coin-id .name { font-weight: 600; font-size: 18px; line-height: 1.2; }
+  .coin-id .sym { color: var(--muted); font-size: 13px; text-transform: uppercase; }
+  .price { font-size: clamp(30px, 5vw, 40px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+  .changes { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { padding: 3px 9px; border-radius: 999px; font-size: 12.5px; font-weight: 600; background: var(--panel-2); }
+  .chip small { color: var(--muted); font-weight: 500; margin-right: 5px; }
+  .up { color: var(--up); }
+  .down { color: var(--down); }
+  dl.stats { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+  dl.stats dt { color: var(--muted); font-size: 12.5px; }
+  dl.stats dd { margin: 2px 0 0; font-weight: 600; font-size: 14px; }
+
+  .feature-chart { position: relative; padding: 20px 20px 12px; display: flex; flex-direction: column; min-width: 0; }
+  .readout { min-height: 44px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+  .readout strong { font-size: 18px; }
+  .readout span { color: var(--muted); font-size: 13px; }
+  .chart-box { position: relative; flex: 1; min-height: 240px; touch-action: pan-y; cursor: crosshair; }
+  .chart-box svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .dot {
+    position: absolute; width: 10px; height: 10px; border-radius: 50%;
+    background: currentColor; border: 2px solid var(--panel);
+    transform: translate(-50%, -50%); pointer-events: none; display: none;
+  }
+  .chart-foot { display: flex; justify-content: space-between; color: var(--muted); font-size: 12.5px; padding-top: 8px; }
+
+  /* Table */
+  .table-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 560px; }
+  th, td { padding: 13px 16px; text-align: right; white-space: nowrap; }
+  th:nth-child(1), td:nth-child(1) { text-align: left; width: 52px; color: var(--muted); }
+  th:nth-child(2), td:nth-child(2) { text-align: left; }
+  thead th { color: var(--muted); font-weight: 500; font-size: 13px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  thead th button { background: none; border: 0; cursor: pointer; padding: 0; color: inherit; font-weight: inherit; font-size: inherit; }
+  thead th button:hover { color: var(--text); }
+  thead th[aria-sort="ascending"] button::after { content: " \2191"; }
+  thead th[aria-sort="descending"] button::after { content: " \2193"; }
+  tbody tr { cursor: pointer; border-bottom: 1px solid rgba(34, 48, 88, 0.6); }
+  tbody tr:last-child { border-bottom: 0; }
+  tbody tr:hover { background: var(--panel-2); }
+  tbody tr[aria-selected="true"] { background: var(--accent-soft); }
+  .cell-coin { display: flex; align-items: center; gap: 10px; }
+  .cell-coin img { width: 24px; height: 24px; border-radius: 50%; }
+  .cell-coin .n { font-weight: 600; }
+  .cell-coin .s { color: var(--muted); font-size: 12.5px; text-transform: uppercase; }
+  td.spark svg { width: 110px; height: 34px; display: block; margin-left: auto; }
+
+  .status { margin-top: 14px; color: var(--muted); font-size: 13px; display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: space-between; }
+  .status .err { color: var(--down); }
+  .empty { padding: 40px 20px; text-align: center; color: var(--muted); }
+
+  @media (max-width: 820px) {
+    .feature { grid-template-columns: 1fr; }
+    .feature-info { border-right: 0; border-bottom: 1px solid var(--line); }
+    .hide-sm { display: none; }
+    table { min-width: 0; }
+    th, td { padding: 12px 10px; }
+    td.spark svg { width: 80px; }
+  }
+  @media (max-width: 480px) {
+    .wrap { padding: 24px 14px 40px; }
+    .search { width: 100%; }
+    .controls { width: 100%; }
+    td.spark, th.spark { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Crypto prices</h1>
+      <p class="sub">Top 50 coins by market cap. Select a coin to see its 7-day chart.</p>
+    </div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Currency">
+        <button type="button" data-cur="usd" aria-pressed="true">USD</button>
+        <button type="button" data-cur="ngn" aria-pressed="false">NGN</button>
+      </div>
+      <input class="search" id="search" type="search" placeholder="Search coins" aria-label="Search coins" autocomplete="off">
+    </div>
+  </header>
+
+  <section class="feature" id="feature" aria-live="polite"></section>
+
+  <section class="table-wrap">
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th aria-sort="ascending" data-key="market_cap_rank"><button type="button">#</button></th>
+            <th data-key="name"><button type="button">Coin</button></th>
+            <th data-key="current_price"><button type="button">Price</button></th>
+            <th class="hide-sm" data-key="price_change_percentage_1h_in_currency"><button type="button">1h</button></th>
+            <th data-key="price_change_percentage_24h_in_currency"><button type="button">24h</button></th>
+            <th class="hide-sm" data-key="price_change_percentage_7d_in_currency"><button type="button">7d</button></th>
+            <th class="hide-sm" data-key="market_cap"><button type="button">Market cap</button></th>
+            <th class="spark">Last 7 days</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="status">
+    <span id="updated">Loading prices…</span>
+    <span>Data from <a href="https://www.coingecko.com" target="_blank" rel="noopener">CoinGecko</a>. Refreshes every 60 seconds.</span>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var API = "https://api.coingecko.com/api/v3/coins/markets";
+  var REFRESH_MS = 60000;
+
+  var state = {
+    coins: [],
+    cur: "usd",
+    selected: "bitcoin",
+    sortKey: "market_cap_rank",
+    sortDir: 1,
+    query: "",
+    fetchedAt: null,
+    error: ""
+  };
+
+  try {
+    var saved = localStorage.getItem("cd-currency");
+    if (saved === "usd" || saved === "ngn") state.cur = saved;
+  } catch (e) {}
+
+  var $ = function (id) { return document.getElementById(id); };
+  var rowsEl = $("rows");
+  var featureEl = $("feature");
+  var updatedEl = $("updated");
+  var searchEl = $("search");
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function money(n) {
+    if (n == null || isNaN(n)) return "–";
+    var abs = Math.abs(n);
+    var opts = { style: "currency", currency: state.cur.toUpperCase() };
+    if (abs >= 1) { opts.minimumFractionDigits = 2; opts.maximumFractionDigits = 2; }
+    else if (abs >= 0.01) { opts.minimumFractionDigits = 4; opts.maximumFractionDigits = 4; }
+    else { opts.minimumFractionDigits = 6; opts.maximumFractionDigits = 8; }
+    return new Intl.NumberFormat(undefined, opts).format(n);
+  }
+
+  function compact(n) {
+    if (n == null || isNaN(n)) return "–";
+    return new Intl.NumberFormat(undefined, {
+      style: "currency", currency: state.cur.toUpperCase(),
+      notation: "compact", maximumFractionDigits: 2
+    }).format(n);
+  }
+
+  function pct(n) {
+    if (n == null || isNaN(n)) return '<span>–</span>';
+    var cls = n >= 0 ? "up" : "down";
+    var sign = n >= 0 ? "+" : "";
+    return '<span class="' + cls + '">' + sign + n.toFixed(2) + "%</span>";
+  }
+
+  /* ---------- Data ---------- */
+  var timer = null;
+  var inflight = 0;
+
+  function load() {
+    var id = ++inflight;
+    var url = API + "?vs_currency=" + state.cur +
+      "&order=market_cap_desc&per_page=50&page=1&sparkline=true" +
+      "&price_change_percentage=1h,24h,7d";
+
+    return fetch(url)
+      .then(function (res) {
+        if (res.status === 429) throw new Error("Rate limit reached. CoinGecko limits free requests, so prices will retry shortly.");
+        if (!res.ok) throw new Error("CoinGecko returned an error (" + res.status + "). Prices will retry shortly.");
+        return res.json();
+      })
+      .then(function (data) {
+        if (id !== inflight) return;
+        state.coins = data;
+        state.fetchedAt = new Date();
+        state.error = "";
+        if (!data.some(function (c) { return c.id === state.selected; }) && data.length) {
+          state.selected = data[0].id;
+        }
+        render();
+      })
+      .catch(function (err) {
+        if (id !== inflight) return;
+        state.error = (err && err.message && err.message.indexOf("Failed to fetch") === -1)
+          ? err.message
+          : "Couldn't reach CoinGecko. Check your connection; prices will retry shortly.";
+        render();
+      });
+  }
+
+  function schedule() {
+    clearInterval(timer);
+    timer = setInterval(function () { if (!document.hidden) load(); }, REFRESH_MS);
+  }
+
+  /* ---------- Rendering ---------- */
+  function visibleCoins() {
+    var q = state.query.trim().toLowerCase();
+    var list = state.coins.filter(function (c) {
+      return !q || c.name.toLowerCase().indexOf(q) > -1 || c.symbol.toLowerCase().indexOf(q) > -1;
+    });
+    var k = state.sortKey, d = state.sortDir;
+    list.sort(function (a, b) {
+      var x = a[k], y = b[k];
+      if (typeof x === "string") return d * x.localeCompare(y);
+      if (x == null) return 1;
+      if (y == null) return -1;
+      return d * (x - y);
+    });
+    return list;
+  }
+
+  function sparkPath(data, w, h, pad) {
+    var min = Math.min.apply(null, data), max = Math.max.apply(null, data);
+    var span = max - min || 1, n = data.length;
+    var pts = data.map(function (v, i) {
+      var x = pad + (i * (w - pad * 2)) / (n - 1);
+      var y = pad + (1 - (v - min) / span) * (h - pad * 2);
+      return [x, y];
+    });
+    return pts;
+  }
+
+  function miniSpark(data, up) {
+    if (!data || data.length < 2) return "";
+    var w = 110, h = 34;
+    var pts = sparkPath(data, w, h, 2);
+    var d = pts.map(function (p, i) { return (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1); }).join("");
+    return '<svg viewBox="0 0 ' + w + " " + h + '" aria-hidden="true" style="color:' + (up ? "var(--up)" : "var(--down)") + '">' +
+      '<path d="' + d + '" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+  }
+
+  function renderRows() {
+    var list = visibleCoins();
+    if (!state.coins.length) {
+      rowsEl.innerHTML = '<tr><td colspan="8" class="empty">' + (state.error ? esc(state.error) : "Loading prices…") + "</td></tr>";
+      return;
+    }
+    if (!list.length) {
+      rowsEl.innerHTML = '<tr><td colspan="8" class="empty">No coins match “' + esc(state.query) + "”. Try a name or symbol like BTC.</td></tr>";
+      return;
+    }
+    rowsEl.innerHTML = list.map(function (c) {
+      var series = c.sparkline_in_7d && c.sparkline_in_7d.price;
+      var up7 = c.price_change_percentage_7d_in_currency >= 0;
+      return '<tr tabindex="0" role="button" data-id="' + esc(c.id) + '" aria-selected="' + (c.id === state.selected) + '">' +
+        "<td>" + esc(c.market_cap_rank) + "</td>" +
+        '<td><div class="cell-coin"><img src="' + esc(c.image) + '" alt="" loading="lazy" width="24" height="24">' +
+        '<div><div class="n">' + esc(c.name) + '</div><div class="s">' + esc(c.symbol) + "</div></div></div></td>" +
+        "<td>" + money(c.current_price) + "</td>" +
+        '<td class="hide-sm">' + pct(c.price_change_percentage_1h_in_currency) + "</td>" +
+        "<td>" + pct(c.price_change_percentage_24h_in_currency) + "</td>" +
+        '<td class="hide-sm">' + pct(c.price_change_percentage_7d_in_currency) + "</td>" +
+        '<td class="hide-sm">' + compact(c.market_cap) + "</td>" +
+        '<td class="spark">' + miniSpark(series, up7) + "</td>" +
+        "</tr>";
+    }).join("");
+  }
+
+  var chartState = null;
+
+  function renderFeature() {
+    var c = state.coins.find(function (x) { return x.id === state.selected; });
+    if (!c) {
+      featureEl.innerHTML = '<div class="empty" style="grid-column:1/-1">' + (state.error ? esc(state.error) : "Loading chart…") + "</div>";
+      chartState = null;
+      return;
+    }
+    var series = (c.sparkline_in_7d && c.sparkline_in_7d.price) || [];
+    var up = series.length ? series[series.length - 1] >= series[0] : true;
+    var color = up ? "var(--up)" : "var(--down)";
+
+    featureEl.innerHTML =
+      '<div class="feature-info">' +
+        '<div class="coin-id"><img src="' + esc(c.image) + '" alt="" width="36" height="36">' +
+        '<div><div class="name">' + esc(c.name) + '</div><div class="sym">' + esc(c.symbol) + "</div></div></div>" +
+        '<div class="price">' + money(c.current_price) + "</div>" +
+        '<div class="changes">' +
+          '<span class="chip"><small>1h</small>' + pct(c.price_change_percentage_1h_in_currency) + "</span>" +
+          '<span class="chip"><small>24h</small>' + pct(c.price_change_percentage_24h_in_currency) + "</span>" +
+          '<span class="chip"><small>7d</small>' + pct(c.price_change_percentage_7d_in_currency) + "</span>" +
+        "</div>" +
+        '<dl class="stats">' +
+          "<div><dt>Market cap</dt><dd>" + compact(c.market_cap) + "</dd></div>" +
+          "<div><dt>24h volume</dt><dd>" + compact(c.total_volume) + "</dd></div>" +
+          "<div><dt>24h high</dt><dd>" + money(c.high_24h) + "</dd></div>" +
+          "<div><dt>24h low</dt><dd>" + money(c.low_24h) + "</dd></div>" +
+        "</dl>" +
+      "</div>" +
+      '<div class="feature-chart">' +
+        '<div class="readout" id="readout"><strong>' + money(c.current_price) + "</strong><span>Now</span></div>" +
+        '<div class="chart-box" id="chartBox" style="color:' + color + '">' +
+          '<svg id="chartSvg" viewBox="0 0 720 300" preserveAspectRatio="none" role="img" aria-label="' + esc(c.name) + ' price over the last 7 days"></svg>' +
+          '<div class="dot" id="dot"></div>' +
+        "</div>" +
+        '<div class="chart-foot"><span>7 days ago</span><span>Now</span></div>' +
+      "</div>";
+
+    drawChart(c, series, up);
+  }
+
+  function drawChart(coin, series, up) {
+    var svg = $("chartSvg");
+    if (!svg || series.length < 2) { chartState = null; return; }
+    var W = 720, H = 300, pt = 16, pb = 10;
+    var min = Math.min.apply(null, series), max = Math.max.apply(null, series);
+    var span = max - min || 1, n = series.length;
+    var xs = function (i) { return (i * W) / (n - 1); };
+    var ys = function (v) { return pt + (1 - (v - min) / span) * (H - pt - pb); };
+    var line = series.map(function (v, i) { return (i ? "L" : "M") + xs(i).toFixed(1) + " " + ys(v).toFixed(1); }).join("");
+    var area = line + "L" + W + " " + H + "L0 " + H + "Z";
+
+    svg.innerHTML =
+      '<defs><linearGradient id="fillGrad" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="currentColor" stop-opacity="0.28"/>' +
+      '<stop offset="1" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs>' +
+      '<path d="' + area + '" fill="url(#fillGrad)"/>' +
+      '<path d="' + line + '" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>' +
+      '<line id="cross" x1="0" y1="0" x2="0" y2="' + H + '" stroke="#8d99c6" stroke-opacity="0.5" stroke-dasharray="3 4" vector-effect="non-scaling-stroke" style="display:none"/>';
+
+    chartState = { coin: coin, series: series, xs: xs, ys: ys, W: W, H: H, n: n };
+  }
+
+  function showPoint(clientX) {
+    if (!chartState) return;
+    var box = $("chartBox");
+    var rect = box.getBoundingClientRect();
+    var ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    var i = Math.round(ratio * (chartState.n - 1));
+    var v = chartState.series[i];
+    var hoursAgo = chartState.n - 1 - i;
+    var when = new Date((state.fetchedAt ? state.fetchedAt.getTime() : Date.now()) - hoursAgo * 3600 * 1000);
+    var cross = $("cross"), dot = $("dot");
+    var x = chartState.xs(i), y = chartState.ys(v);
+    cross.setAttribute("x1", x); cross.setAttribute("x2", x); cross.style.display = "";
+    dot.style.display = "block";
+    dot.style.left = (x / chartState.W) * 100 + "%";
+    dot.style.top = (y / chartState.H) * 100 + "%";
+    $("readout").innerHTML = "<strong>" + money(v) + "</strong><span>" +
+      esc(when.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric" })) + "</span>";
+  }
+
+  function resetPoint() {
+    if (!chartState) return;
+    var cross = $("cross"), dot = $("dot");
+    if (cross) cross.style.display = "none";
+    if (dot) dot.style.display = "none";
+    $("readout").innerHTML = "<strong>" + money(chartState.coin.current_price) + "</strong><span>Now</span>";
+  }
+
+  function renderStatus() {
+    if (state.error) {
+      updatedEl.innerHTML = '<span class="err">' + esc(state.error) + "</span>" +
+        (state.fetchedAt ? " Showing prices from " + esc(state.fetchedAt.toLocaleTimeString()) + "." : "");
+    } else if (state.fetchedAt) {
+      updatedEl.textContent = "Updated " + state.fetchedAt.toLocaleTimeString();
+    }
+  }
+
+  function renderHeaders() {
+    document.querySelectorAll("thead th[data-key]").forEach(function (th) {
+      var active = th.getAttribute("data-key") === state.sortKey;
+      if (active) th.setAttribute("aria-sort", state.sortDir === 1 ? "ascending" : "descending");
+      else th.removeAttribute("aria-sort");
+    });
+    document.querySelectorAll(".seg button").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-cur") === state.cur));
+    });
+  }
+
+  function render() {
+    renderHeaders();
+    renderRows();
+    renderFeature();
+    renderStatus();
+  }
+
+  /* ---------- Events ---------- */
+  document.querySelector(".seg").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-cur]");
+    if (!b || b.getAttribute("data-cur") === state.cur) return;
+    state.cur = b.getAttribute("data-cur");
+    try { localStorage.setItem("cd-currency", state.cur); } catch (err) {}
+    state.coins = [];
+    state.error = "";
+    updatedEl.textContent = "Loading prices…";
+    render();
+    load();
+    schedule();
+  });
+
+  searchEl.addEventListener("input", function () {
+    state.query = searchEl.value;
+    renderRows();
+  });
+
+  document.querySelector("thead").addEventListener("click", function (e) {
+    var th = e.target.closest("th[data-key]");
+    if (!th) return;
+    var key = th.getAttribute("data-key");
+    if (state.sortKey === key) state.sortDir *= -1;
+    else { state.sortKey = key; state.sortDir = (key === "name" || key === "market_cap_rank") ? 1 : -1; }
+    renderHeaders();
+    renderRows();
+  });
+
+  function selectRow(tr) {
+    if (!tr) return;
+    state.selected = tr.getAttribute("data-id");
+    renderRows();
+    renderFeature();
+    featureEl.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "nearest" });
+  }
+  rowsEl.addEventListener("click", function (e) { selectRow(e.target.closest("tr[data-id]")); });
+  rowsEl.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectRow(e.target.closest("tr[data-id]")); }
+  });
+
+  featureEl.addEventListener("pointermove", function (e) {
+    if (e.target.closest("#chartBox")) showPoint(e.clientX);
+  });
+  featureEl.addEventListener("pointerleave", resetPoint);
+  featureEl.addEventListener("pointerup", function (e) { if (e.pointerType !== "mouse") resetPoint(); });
+
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden && state.fetchedAt && Date.now() - state.fetchedAt.getTime() > REFRESH_MS) load();
+  });
+
+  /* ---------- Start ---------- */
+  render();
+  load();
+  schedule();
+})();
+</script>
+</body>
+</html>
